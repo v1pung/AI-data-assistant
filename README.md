@@ -159,10 +159,24 @@ api -> application -> domain <- infrastructure
 1. API принимает вопрос.
 2. `SchemaProvider` получает схему БД.
 3. LLM строит SQL на основе вопроса и схемы.
-4. `SqlGlotGuard` проверяет, что это одиночный безопасный `SELECT`.
-5. `SqlExecutor` делает preflight `EXPLAIN (FORMAT JSON)` и проверяет budget.
-6. `SqlExecutor` выполняет запрос в `read-only` транзакции с `statement_timeout`.
-7. API возвращает SQL, колонки и строки результата.
+4. При unsafe SQL use case делает retry (до `SQL_GENERATION_MAX_ATTEMPTS`) с validation feedback.
+5. `SqlGlotGuard` проверяет, что это одиночный безопасный `SELECT`, и применяет quality policy.
+6. `SqlExecutor` делает preflight `EXPLAIN (FORMAT JSON)` и проверяет budget.
+7. `SqlExecutor` выполняет запрос в `read-only` транзакции с `statement_timeout`.
+8. API возвращает SQL, колонки и строки результата.
+
+## Observability
+
+- structured logging в key=value формате по стадиям (`event=...`), включая pipeline/LLM/SQL шаги;
+- correlation через `X-Request-ID` и лог-фильтр request id;
+- Prometheus-метрики на `/metrics`:
+  - HTTP request count/latency,
+  - LLM request outcomes + latency,
+  - LLM token usage,
+  - SQL execution latency,
+  - preflight EXPLAIN outcomes,
+  - query cost exceeded counter;
+- в ответе `/api/v1/ask` возвращаются диагностические поля `execution_ms`, `estimated_cost`, `estimated_plan_rows`.
 
 ## Безопасность и устойчивость
 
